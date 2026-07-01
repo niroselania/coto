@@ -94,11 +94,6 @@
       background: #fff8f8;
     }
 
-    .btn:disabled {
-      cursor: progress;
-      opacity: .72;
-    }
-
     .toolbar {
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
@@ -322,91 +317,6 @@
 
     .history button:hover { border-color: var(--accent-2); }
 
-    .compare-config {
-      display: grid;
-      gap: 4px;
-      color: var(--muted);
-      font-size: .92rem;
-      margin-bottom: 10px;
-    }
-
-    .compare-summary {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
-      margin: 10px 0;
-    }
-
-    .total-card {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: white;
-      padding: 10px;
-    }
-
-    .total-card.best {
-      border-color: #8bd5ca;
-      background: #f2fbf9;
-    }
-
-    .total-card strong {
-      display: block;
-      margin-bottom: 5px;
-    }
-
-    .money {
-      font-weight: 800;
-      color: #115e59;
-    }
-
-    .compare-results {
-      display: grid;
-      gap: 8px;
-      max-height: 360px;
-      overflow: auto;
-    }
-
-    .compare-row {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 10px;
-      background: white;
-    }
-
-    .compare-row h3 {
-      margin: 0 0 8px;
-      font-size: .98rem;
-    }
-
-    .store-line {
-      display: grid;
-      grid-template-columns: 92px 1fr auto;
-      gap: 8px;
-      align-items: start;
-      padding: 6px 0;
-      border-top: 1px solid #eee8da;
-      font-size: .9rem;
-    }
-
-    .store-line:first-of-type { border-top: 0; }
-
-    .store-line a {
-      color: var(--accent-2);
-      text-decoration: none;
-      font-weight: 700;
-    }
-
-    .status {
-      color: var(--muted);
-      font-size: .86rem;
-    }
-
-    .promo {
-      color: var(--accent);
-      font-size: .84rem;
-      margin-top: 3px;
-    }
-
     .toast {
       position: fixed;
       right: 16px;
@@ -459,9 +369,6 @@
         <button class="btn primary" id="whatsappBtn" type="button" title="Enviar por WhatsApp" aria-label="Enviar por WhatsApp">
           <span>WhatsApp</span>
         </button>
-        <button class="btn" id="compareBtn" type="button" title="Comparar precios" aria-label="Comparar precios">
-          <span>Comparar</span>
-        </button>
         <button class="btn danger" id="clearBtn" type="button" title="Limpiar lista" aria-label="Limpiar lista">
           <span>Limpiar</span>
         </button>
@@ -491,18 +398,6 @@
           <h2>Seleccionados</h2>
           <ul class="selected-list" id="selectedList"></ul>
       <p class="empty" id="emptySelected">Todavía no seleccionaste productos.</p>
-        </div>
-
-        <div class="panel">
-          <h2>Comparador</h2>
-          <div class="compare-config" id="compareConfig">
-            <span>Zona: Beccar 1643</span>
-            <span>Modo: compra en sucursal</span>
-            <span>Promo: Comunidad Coto</span>
-          </div>
-          <div class="compare-summary" id="compareSummary"></div>
-          <div class="compare-results" id="compareResults"></div>
-          <p class="empty" id="emptyCompare">Seleccioná productos y tocá Comparar.</p>
         </div>
 
         <div class="panel">
@@ -549,10 +444,6 @@
     const searchEl = document.querySelector("#search");
     const counterEl = document.querySelector("#counter");
     const toastEl = document.querySelector("#toast");
-    const compareBtnEl = document.querySelector("#compareBtn");
-    const compareSummaryEl = document.querySelector("#compareSummary");
-    const compareResultsEl = document.querySelector("#compareResults");
-    const emptyCompareEl = document.querySelector("#emptyCompare");
 
     const checkIcon = '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="m9 16.2-3.5-3.5L4.1 14.1 9 19 20.3 7.7l-1.4-1.4L9 16.2Z"/></svg>';
     const removeIcon = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7.1 18.3 5.7 16.9l4.9-4.9-4.9-4.9 1.4-1.4 4.9 4.9 4.9-4.9 1.4 1.4-4.9 4.9 4.9 4.9-1.4 1.4-4.9-4.9-4.9 4.9Z"/></svg>';
@@ -567,21 +458,6 @@
 
     function compactDate() {
       return new Intl.DateTimeFormat("es-AR", { dateStyle: "short", timeStyle: "short" }).format(new Date());
-    }
-
-    function formatMoney(value) {
-      if (!Number.isFinite(value)) return "Sin total";
-      return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(value);
-    }
-
-    function escapeHtml(text) {
-      return String(text || "").replace(/[&<>"']/g, char => ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#039;"
-      }[char]));
     }
 
     function showToast(message) {
@@ -716,83 +592,6 @@
       renderHistory();
     }
 
-    function renderComparison(data) {
-      compareSummaryEl.innerHTML = "";
-      compareResultsEl.innerHTML = "";
-      emptyCompareEl.hidden = Boolean(data);
-      if (!data) return;
-
-      data.totals.forEach(total => {
-        const card = document.createElement("div");
-        card.className = `total-card ${data.cheapestTotalStore === total.store ? "best" : ""}`;
-        card.innerHTML = `
-          <strong>${escapeHtml(total.name)}</strong>
-          <div class="money">${formatMoney(total.total)}</div>
-          <div class="status">${total.found} encontrados, ${total.missing} para revisar</div>
-        `;
-        compareSummaryEl.appendChild(card);
-      });
-
-      data.rows.forEach(row => {
-        const item = document.createElement("div");
-        item.className = "compare-row";
-        const lines = data.stores.map(store => {
-          const offer = row.offers[store.id];
-          const promo = offer?.promotions?.length ? `<div class="promo">${escapeHtml(offer.promotions.join(" · "))}</div>` : "";
-          const price = offer?.found ? `<span class="money">${formatMoney(offer.price)}</span>` : `<span class="status">Revisar</span>`;
-          const link = offer?.url || offer?.searchUrl || "#";
-          const detail = offer?.found ? escapeHtml(offer.name) : escapeHtml(offer?.message || "Sin precio confiable");
-          return `
-            <div class="store-line">
-              <strong>${escapeHtml(store.name)}</strong>
-              <div>
-                <div>${detail}</div>
-                ${promo}
-                <a href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer">abrir</a>
-              </div>
-              ${price}
-            </div>
-          `;
-        }).join("");
-        item.innerHTML = `<h3>${escapeHtml(row.product)}</h3>${lines}`;
-        compareResultsEl.appendChild(item);
-      });
-    }
-
-    async function comparePrices() {
-      const selected = Array.from(state.selected);
-      if (!selected.length) {
-        showToast("Seleccioná productos antes de comparar.");
-        return;
-      }
-
-      compareBtnEl.disabled = true;
-      compareBtnEl.textContent = "Comparando...";
-      emptyCompareEl.hidden = false;
-      emptyCompareEl.textContent = "Buscando precios publicados de Coto y Carrefour...";
-      compareSummaryEl.innerHTML = "";
-      compareResultsEl.innerHTML = "";
-
-      try {
-        const response = await fetch("/api/compare", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ products: selected })
-        });
-        if (!response.ok) throw new Error("No se pudo comparar.");
-        const data = await response.json();
-        renderComparison(data);
-        showToast("Comparación actualizada.");
-      } catch (error) {
-        emptyCompareEl.hidden = false;
-        emptyCompareEl.textContent = "No pude consultar precios desde este entorno.";
-        showToast("No se pudo comparar precios.");
-      } finally {
-        compareBtnEl.disabled = false;
-        compareBtnEl.textContent = "Comparar";
-      }
-    }
-
     function toggleItem(item) {
       if (state.selected.has(item)) {
         state.selected.delete(item);
@@ -846,7 +645,6 @@
     document.querySelector("#today").textContent = todayLabel();
     document.querySelector("#saveBtn").addEventListener("click", saveSnapshot);
     document.querySelector("#whatsappBtn").addEventListener("click", sendWhatsapp);
-    compareBtnEl.addEventListener("click", comparePrices);
     document.querySelector("#clearBtn").addEventListener("click", clearList);
     searchEl.addEventListener("input", renderCategories);
     notesEl.addEventListener("input", () => {
@@ -857,6 +655,200 @@
     loadActive();
     notesEl.value = state.notes;
     render();
+  </script>
+  <style>
+    .compare-panel {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 14px;
+    }
+    .compare-panel h2 {
+      margin: 0 0 10px;
+      font-size: 1.05rem;
+    }
+    .compare-summary {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin: 10px 0;
+    }
+    .total-card, .compare-row {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: white;
+      padding: 10px;
+    }
+    .total-card.best {
+      border-color: #8bd5ca;
+      background: #f2fbf9;
+    }
+    .money {
+      color: #115e59;
+      font-weight: 800;
+    }
+    .compare-results {
+      display: grid;
+      gap: 8px;
+      max-height: 360px;
+      overflow: auto;
+    }
+    .compare-row h3 {
+      margin: 0 0 8px;
+      font-size: .98rem;
+    }
+    .store-line {
+      display: grid;
+      grid-template-columns: 88px 1fr auto;
+      gap: 8px;
+      align-items: start;
+      border-top: 1px solid #eee8da;
+      padding: 7px 0;
+      font-size: .9rem;
+    }
+    .store-line:first-of-type { border-top: 0; }
+    .store-line a {
+      color: var(--accent-2);
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .status {
+      color: var(--muted);
+      font-size: .85rem;
+    }
+    .promo {
+      color: var(--accent);
+      font-size: .83rem;
+      margin-top: 3px;
+    }
+  </style>
+  <script>
+    (() => {
+      const whatsappBtn = document.querySelector("#whatsappBtn");
+      const side = document.querySelector(".side");
+      const toast = document.querySelector("#toast");
+
+      const compareBtn = document.createElement("button");
+      compareBtn.className = "btn";
+      compareBtn.type = "button";
+      compareBtn.textContent = "Comparar";
+      compareBtn.setAttribute("aria-label", "Comparar precios");
+      whatsappBtn.insertAdjacentElement("afterend", compareBtn);
+
+      const panel = document.createElement("div");
+      panel.className = "compare-panel";
+      panel.innerHTML = `
+        <h2>Comparador</h2>
+        <p class="empty" id="compareEmpty">Beccar 1643 · compra en sucursal · Coto y Carrefour</p>
+        <div class="compare-summary" id="compareSummary"></div>
+        <div class="compare-results" id="compareResults"></div>
+      `;
+      side.insertBefore(panel, side.children[2]);
+
+      const compareEmpty = document.querySelector("#compareEmpty");
+      const compareSummary = document.querySelector("#compareSummary");
+      const compareResults = document.querySelector("#compareResults");
+
+      function selectedProducts() {
+        return [...document.querySelectorAll("#selectedList li span")]
+          .map(item => item.textContent.trim())
+          .filter(Boolean);
+      }
+
+      function formatMoney(value) {
+        if (!Number.isFinite(value)) return "Sin total";
+        return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(value);
+      }
+
+      function escapeHtml(text) {
+        return String(text || "").replace(/[&<>"']/g, char => ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#039;"
+        }[char]));
+      }
+
+      function showCompareToast(message) {
+        toast.textContent = message;
+        toast.classList.add("show");
+        setTimeout(() => toast.classList.remove("show"), 2400);
+      }
+
+      function renderComparison(data) {
+        compareEmpty.hidden = true;
+        compareSummary.innerHTML = "";
+        compareResults.innerHTML = "";
+
+        data.totals.forEach(total => {
+          const card = document.createElement("div");
+          card.className = `total-card ${data.cheapestTotalStore === total.store ? "best" : ""}`;
+          card.innerHTML = `
+            <strong>${escapeHtml(total.name)}</strong>
+            <div class="money">${formatMoney(total.total)}</div>
+            <div class="status">${total.found} encontrados, ${total.missing} para revisar</div>
+          `;
+          compareSummary.appendChild(card);
+        });
+
+        data.rows.forEach(row => {
+          const item = document.createElement("div");
+          item.className = "compare-row";
+          const lines = data.stores.map(store => {
+            const offer = row.offers[store.id];
+            const price = offer?.found ? `<span class="money">${formatMoney(offer.price)}</span>` : `<span class="status">Revisar</span>`;
+            const detail = offer?.found ? escapeHtml(offer.name) : escapeHtml(offer?.message || "Sin precio confiable");
+            const promo = offer?.promotions?.length ? `<div class="promo">${escapeHtml(offer.promotions.join(" · "))}</div>` : "";
+            const link = escapeHtml(offer?.url || offer?.searchUrl || "#");
+            return `
+              <div class="store-line">
+                <strong>${escapeHtml(store.name)}</strong>
+                <div>
+                  <div>${detail}</div>
+                  ${promo}
+                  <a href="${link}" target="_blank" rel="noopener noreferrer">abrir</a>
+                </div>
+                ${price}
+              </div>
+            `;
+          }).join("");
+          item.innerHTML = `<h3>${escapeHtml(row.product)}</h3>${lines}`;
+          compareResults.appendChild(item);
+        });
+      }
+
+      compareBtn.addEventListener("click", async () => {
+        const products = selectedProducts();
+        if (!products.length) {
+          showCompareToast("Seleccioná productos antes de comparar.");
+          return;
+        }
+        compareBtn.disabled = true;
+        compareBtn.textContent = "Comparando...";
+        compareEmpty.hidden = false;
+        compareEmpty.textContent = "Buscando precios publicados...";
+        compareSummary.innerHTML = "";
+        compareResults.innerHTML = "";
+        try {
+          const response = await fetch("/api/compare", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ products })
+          });
+          if (!response.ok) throw new Error("No se pudo comparar.");
+          renderComparison(await response.json());
+          showCompareToast("Comparación actualizada.");
+        } catch (error) {
+          compareEmpty.textContent = "No pude consultar precios.";
+          showCompareToast("No se pudo comparar.");
+        } finally {
+          compareBtn.disabled = false;
+          compareBtn.textContent = "Comparar";
+        }
+      });
+    })();
   </script>
 </body>
 </html>

@@ -4,54 +4,24 @@ const path = require("node:path");
 
 const PORT = Number(process.env.PORT || 8080);
 const PUBLIC_DIR = path.join(__dirname, "outputs");
-const DEFAULT_HEADERS = {
-  "content-type": "application/json; charset=utf-8",
-  "cache-control": "no-store"
-};
-
-const APP_CONFIG = {
-  zone: "Beccar",
-  postalCode: "1643",
-  shoppingMode: "sucursal",
-  memberships: ["Comunidad Coto"],
-  autoPickCheapest: true
-};
-
-const STORES = [
-  {
-    id: "coto",
-    name: "Coto",
-    membership: "Comunidad Coto",
-    searchUrl(query) {
-      return `https://www.cotodigital.com.ar/sitios/cdigi/browse?Ntt=${encodeURIComponent(query)}`;
-    }
-  },
-  {
-    id: "carrefour",
-    name: "Carrefour",
-    membership: null,
-    apiUrl(query) {
-      return `https://www.carrefour.com.ar/api/catalog_system/pub/products/search/${encodeURIComponent(query)}?_from=0&_to=9`;
-    },
-    searchUrl(query) {
-      return `https://www.carrefour.com.ar/${encodeURIComponent(query)}?_q=${encodeURIComponent(query)}&map=ft`;
-    }
-  }
-];
+const COTO_API = "https://api.coto.com.ar/api/v1/ms-digital-sitio-bff-web/api/v1";
+const COTO_KEY = "key_r6xzz4IAoTWcipni";
+const COTO_STORE = "200";
 
 const PRODUCT_SEARCH_ALIASES = {
   "leche": "leche larga vida 1l",
-  "pan lactal": "pan lactal",
-  "pan de hamburguesa": "pan hamburguesa",
-  "pan de pancho": "pan pancho"
+  "pan lactal": "pan lactal"
 };
 
 const PRODUCT_EXCLUSIONS = {
-  "leche": ["yogur", "dulce de leche", "capsulas", "cápsulas", "espumador", "chocolate"],
-  "pan lactal": ["hamburguesa", "pancho", "panchos"],
-  "pan de hamburguesa": ["lactal blanco", "salvado"],
-  "pan de pancho": ["hamburguesa", "lactal blanco", "salvado"]
+  "leche": ["yogur", "dulce de leche", "capsulas", "cápsulas", "espumador"],
+  "pan lactal": ["hamburguesa", "pancho", "panchos"]
 };
+
+const STORES = [
+  { id: "coto", name: "Coto" },
+  { id: "carrefour", name: "Carrefour" }
+];
 
 function normalize(text) {
   return String(text || "")
@@ -63,44 +33,8 @@ function normalize(text) {
     .trim();
 }
 
-function parseArgentinePrice(value) {
-  if (!value) return null;
-  const cleaned = String(value).replace(/[^\d,.]/g, "");
-  if (!cleaned) return null;
-  const normalized = cleaned.includes(",")
-    ? cleaned.replace(/\./g, "").replace(",", ".")
-    : cleaned;
-  const number = Number(normalized);
-  return Number.isFinite(number) && number > 0 ? number : null;
-}
-
-function absoluteUrl(baseUrl, href) {
-  try {
-    return new URL(href, baseUrl).toString();
-  } catch {
-    return baseUrl;
-  }
-}
-
-function stripTags(html) {
-  return String(html || "")
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function extractPromotions(text, store) {
-  const promoWords = ["oferta", "promo", "promocion", "promoción", "descuento", "2x1", "3x2", "segunda unidad", "comunidad coto"];
-  const cleanText = stripTags(text);
-  const chunks = cleanText.split(/(?<=[.!?])\s+|\s{2,}/).filter(Boolean);
-  return chunks
-    .filter(chunk => promoWords.some(word => normalize(chunk).includes(normalize(word))))
-    .filter(chunk => !store.membership || normalize(chunk).includes("comunidad coto") || normalize(chunk).includes("promo") || normalize(chunk).includes("oferta"))
-    .slice(0, 3);
+function productSearchQuery(product) {
+  return PRODUCT_SEARCH_ALIASES[normalize(product)] || product;
 }
 
 function scoreName(name, query) {
@@ -118,134 +52,10 @@ function scoreName(name, query) {
   return score;
 }
 
-function productSearchQuery(product) {
-  const normalized = normalize(product);
-  return PRODUCT_SEARCH_ALIASES[normalized] || product;
-}
-
-function isEquivalentProduct(name, product) {
-  return scoreName(name, product) > 0;
-}
-
-function parseJsonLdOffers(html, baseUrl, query, store) {
-  const offers = [];
-  const regex = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
-  let match;
-  while ((match = regex.exec(html))) {
-    try {
-      const parsed = JSON.parse(match[1].trim());
-      const nodes = Array.isArray(parsed) ? parsed : [parsed];
-      for (const node of nodes) {
-        const graph = Array.isArray(node["@graph"]) ? node["@graph"] : [node];
-        for (const item of graph) {
-          const price = parseArgentinePrice(item?.offers?.price || item?.price);
-          const name = item?.name || query;
-          if (price) {
-            offers.push({
-              name,
-              price,
-              url: absoluteUrl(baseUrl, item?.url || item?.offers?.url || baseUrl),
-              source: "json-ld",
-              promotions: extractPromotions(JSON.stringify(item), store),
-              score: scoreName(name, query)
-            });
-          }
-        }
-      }
-    } catch {
-      // Ignore malformed embedded JSON.
-    }
-  }
-  return offers;
-}
-
-function parseHtmlPriceHints(html, baseUrl, query, store) {
-  const offers = [];
-  const text = stripTags(html);
-  const priceMatches = [...text.matchAll(/\$\s?([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})|[0-9]+(?:,[0-9]{2})?)/g)].slice(0, 12);
-  const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-  const title = titleMatch ? stripTags(titleMatch[1]) : query;
-  const productName = title.split("|")[0].split("-")[0].trim() || query;
-
-  for (const match of priceMatches) {
-    const context = text.slice(Math.max(0, match.index - 90), match.index + 120);
-    if (/descuento|mínimo|minimo|regalamos|ahorra|tope|bonific/i.test(context)) continue;
-    const price = parseArgentinePrice(match[1]);
-    if (!price || price < 100) continue;
-    offers.push({
-      name: productName,
-      price,
-      url: baseUrl,
-      source: "html",
-      promotions: extractPromotions(text.slice(Math.max(0, match.index - 220), match.index + 260), store),
-      score: scoreName(productName, query)
-    });
-  }
-  return offers;
-}
-
-function parseVtexProducts(products, query, store) {
-  if (!Array.isArray(products)) return [];
-  const offers = [];
-
-  for (const product of products) {
-    const name = product.productName || product.productTitle || query;
-    const productScore = scoreName(name, query);
-    if (!isEquivalentProduct(name, query)) continue;
-    const promotions = Object.values(product.productClusters || {})
-      .filter(label => /promo|dto|off|2x1|3x2|4x3|descuento|unidad/i.test(label))
-      .slice(0, 4);
-
-    for (const sku of product.items || []) {
-      for (const seller of sku.sellers || []) {
-        const commercial = seller.commertialOffer || {};
-        const price = Number(commercial.Price || commercial.spotPrice || 0);
-        const available = Number(commercial.AvailableQuantity || 0);
-        const sellerName = String(seller.sellerName || "");
-        if (!Number.isFinite(price) || price <= 0 || available <= 0) continue;
-        if (store.id === "carrefour" && sellerName && !/carrefour/i.test(sellerName)) continue;
-        offers.push({
-          name,
-          price,
-          url: product.link || store.searchUrl(query),
-          source: "vtex-api",
-          promotions,
-          score: productScore
-        });
-      }
-    }
-  }
-
-  return offers;
-}
-
 function chooseBestOffer(offers) {
-  const valid = offers
-    .filter(offer => Number.isFinite(offer.price))
-    .sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      return a.price - b.price;
-    });
-  return valid[0] || null;
-}
-
-async function fetchHtml(url) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 12000);
-  try {
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        "accept": "text/html,application/xhtml+xml",
-        "accept-language": "es-AR,es;q=0.9",
-        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36"
-      }
-    });
-    const html = await response.text();
-    return { ok: response.ok, status: response.status, html };
-  } finally {
-    clearTimeout(timeout);
-  }
+  return offers
+    .filter(offer => Number.isFinite(offer.price) && offer.price > 0 && offer.score > 0)
+    .sort((a, b) => (b.score - a.score) || (a.price - b.price))[0] || null;
 }
 
 async function fetchJson(url) {
@@ -255,153 +65,137 @@ async function fetchJson(url) {
     const response = await fetch(url, {
       signal: controller.signal,
       headers: {
-        "accept": "application/json",
+        accept: "application/json",
         "accept-language": "es-AR,es;q=0.9",
-        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36"
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36",
+        origin: "https://www.cotodigital.com.ar",
+        referer: "https://www.cotodigital.com.ar/sitios/cdigi/nuevositio"
       }
     });
     const text = await response.text();
-    const data = text ? JSON.parse(text) : null;
-    return { ok: response.ok, status: response.status, data };
+    return { ok: response.ok, status: response.status, data: text ? JSON.parse(text) : null };
   } finally {
     clearTimeout(timeout);
   }
 }
 
-async function findStoreOffer(store, product) {
-  const lookupQuery = productSearchQuery(product);
-  const searchUrl = store.searchUrl(lookupQuery);
-  try {
-    if (store.apiUrl) {
-      const apiUrl = store.apiUrl(lookupQuery);
-      const { ok, status, data } = await fetchJson(apiUrl);
-      if (ok) {
-        const best = chooseBestOffer(parseVtexProducts(data, product, store));
-        if (best) {
-          return {
-            store: store.id,
-            storeName: store.name,
-            product,
-            found: true,
-            status: "ok",
-            name: best.name,
-            price: best.price,
-            url: best.url,
-            searchUrl,
-            promotions: best.promotions,
-            source: best.source
-          };
-        }
-      } else {
-        return {
-          store: store.id,
-          storeName: store.name,
-          product,
-          found: false,
-          status: "needs-review",
-          message: `La API respondió ${status}.`,
-          searchUrl
-        };
-      }
-    }
-
-    const { ok, status, html } = await fetchHtml(searchUrl);
-    if (!ok || !html) {
-      return {
-        store: store.id,
-        storeName: store.name,
-        product,
-        found: false,
-        status: "needs-review",
-        message: `El sitio respondió ${status}.`,
-        searchUrl
-      };
-    }
-
-    const offers = [
-      ...parseJsonLdOffers(html, searchUrl, product, store),
-      ...parseHtmlPriceHints(html, searchUrl, product, store)
-    ].filter(offer => isEquivalentProduct(offer.name, product));
-    const best = chooseBestOffer(offers);
-
-    if (!best) {
-      return {
-        store: store.id,
-        storeName: store.name,
-        product,
-        found: false,
-        status: "needs-review",
-        message: "No pude leer un precio confiable; revisar el link.",
-        searchUrl
-      };
-    }
-
-    return {
-      store: store.id,
-      storeName: store.name,
-      product,
-      found: true,
-      status: "ok",
-      name: best.name,
-      price: best.price,
-      url: best.url,
-      searchUrl,
-      promotions: best.promotions,
-      source: best.source
-    };
-  } catch (error) {
-    return {
-      store: store.id,
-      storeName: store.name,
-      product,
-      found: false,
-      status: "error",
-      message: error.name === "AbortError" ? "La búsqueda tardó demasiado." : "No se pudo consultar el sitio.",
-      searchUrl
-    };
-  }
+function cotoSearchUrl(query) {
+  return `https://www.cotodigital.com.ar/sitios/cdigi/nuevositio/productos/${encodeURIComponent(query)}`;
 }
 
-function buildTotals(rows) {
-  return STORES.map(store => {
-    const storeRows = rows.map(row => row.offers[store.id]);
-    const foundRows = storeRows.filter(offer => offer?.found);
-    const missingRows = storeRows.filter(offer => !offer?.found);
-    const total = foundRows.reduce((sum, offer) => sum + offer.price, 0);
+function carrefourSearchUrl(query) {
+  return `https://www.carrefour.com.ar/${encodeURIComponent(query)}?_q=${encodeURIComponent(query)}&map=ft`;
+}
+
+function parseCotoProducts(data, product) {
+  const results = data?.response?.results || [];
+  return results.map(result => {
+    const attrs = result.data || {};
+    const name = attrs["product.displayName"]?.[0] || attrs["sku.displayName"]?.[0] || result.value || product;
+    const prices = attrs.price || [];
+    const storePrice = prices.find(price => String(price.store).padStart(3, "0") === COTO_STORE) || prices[0];
+    const price = Number(storePrice?.listPrice || storePrice?.formatPrice || attrs["sku.activePrice"]?.[0] || 0);
+    const promos = [
+      ...(attrs["product.dtoDescuentos"] || []),
+      ...(attrs["product.tipoOferta"] || [])
+    ].map(String).filter(Boolean).slice(0, 3);
     return {
-      store: store.id,
-      name: store.name,
-      total,
-      found: foundRows.length,
-      missing: missingRows.length,
-      complete: missingRows.length === 0
+      name,
+      price,
+      url: cotoSearchUrl(productSearchQuery(product)),
+      promotions: promos,
+      source: "coto-api",
+      score: scoreName(name, product)
     };
   });
 }
 
-async function compareProducts(products) {
-  const uniqueProducts = [...new Set(products.map(item => String(item).trim()).filter(Boolean))].slice(0, 60);
-  const rows = [];
+function parseCarrefourProducts(products, product) {
+  if (!Array.isArray(products)) return [];
+  return products.flatMap(item => {
+    const name = item.productName || product;
+    const promotions = Object.values(item.productClusters || {})
+      .filter(label => /promo|dto|off|2x1|3x2|4x3|descuento|unidad/i.test(label))
+      .slice(0, 3);
+    return (item.items || []).flatMap(sku => (sku.sellers || []).map(seller => {
+      const offer = seller.commertialOffer || {};
+      const sellerName = String(seller.sellerName || "");
+      const price = Number(offer.Price || offer.spotPrice || 0);
+      const available = Number(offer.AvailableQuantity || 0);
+      if (!/carrefour/i.test(sellerName) || price <= 0 || available <= 0) return null;
+      return {
+        name,
+        price,
+        url: item.link || carrefourSearchUrl(productSearchQuery(product)),
+        promotions,
+        source: "carrefour-api",
+        score: scoreName(name, product)
+      };
+    }).filter(Boolean));
+  });
+}
 
-  for (const product of uniqueProducts) {
-    const offersArray = await Promise.all(STORES.map(store => findStoreOffer(store, product)));
-    const offers = Object.fromEntries(offersArray.map(offer => [offer.store, offer]));
-    const foundOffers = offersArray.filter(offer => offer.found);
-    const cheapest = foundOffers.sort((a, b) => a.price - b.price)[0] || null;
-    rows.push({ product, offers, cheapestStore: cheapest?.store || null });
+async function findCotoOffer(product) {
+  const query = productSearchQuery(product);
+  const params = new URLSearchParams({
+    key: COTO_KEY,
+    num_results_per_page: "12",
+    pre_filter_expression: JSON.stringify({ name: "store_availability", value: COTO_STORE }),
+    c: "cio-fe-web-coto-super-lista"
+  });
+  const apiUrl = `${COTO_API}/products/search/${encodeURIComponent(query)}?${params}`;
+  const searchUrl = cotoSearchUrl(query);
+  try {
+    const { ok, status, data } = await fetchJson(apiUrl);
+    const best = ok ? chooseBestOffer(parseCotoProducts(data, product)) : null;
+    if (best) return { store: "coto", storeName: "Coto", product, found: true, status: "ok", searchUrl, ...best };
+    return { store: "coto", storeName: "Coto", product, found: false, status: "needs-review", message: `Coto no devolvió precio confiable (${status}).`, searchUrl };
+  } catch (error) {
+    return { store: "coto", storeName: "Coto", product, found: false, status: "error", message: "No se pudo consultar Coto.", searchUrl };
   }
+}
 
-  const totals = buildTotals(rows);
-  const completeTotals = totals.filter(total => total.complete);
-  const cheapestTotal = completeTotals.sort((a, b) => a.total - b.total)[0] || null;
+async function findCarrefourOffer(product) {
+  const query = productSearchQuery(product);
+  const apiUrl = `https://www.carrefour.com.ar/api/catalog_system/pub/products/search/${encodeURIComponent(query)}?_from=0&_to=9`;
+  const searchUrl = carrefourSearchUrl(query);
+  try {
+    const { ok, status, data } = await fetchJson(apiUrl);
+    const best = ok ? chooseBestOffer(parseCarrefourProducts(data, product)) : null;
+    if (best) return { store: "carrefour", storeName: "Carrefour", product, found: true, status: "ok", searchUrl, ...best };
+    return { store: "carrefour", storeName: "Carrefour", product, found: false, status: "needs-review", message: `Carrefour no devolvió precio confiable (${status}).`, searchUrl };
+  } catch (error) {
+    return { store: "carrefour", storeName: "Carrefour", product, found: false, status: "error", message: "No se pudo consultar Carrefour.", searchUrl };
+  }
+}
 
+async function compareProducts(products) {
+  const unique = [...new Set(products.map(item => String(item).trim()).filter(Boolean))].slice(0, 50);
+  const rows = [];
+  for (const product of unique) {
+    const [coto, carrefour] = await Promise.all([findCotoOffer(product), findCarrefourOffer(product)]);
+    const found = [coto, carrefour].filter(offer => offer.found).sort((a, b) => a.price - b.price);
+    rows.push({ product, offers: { coto, carrefour }, cheapestStore: found[0]?.store || null });
+  }
+  const totals = STORES.map(store => {
+    const offers = rows.map(row => row.offers[store.id]);
+    const found = offers.filter(offer => offer?.found);
+    return {
+      store: store.id,
+      name: store.name,
+      total: found.reduce((sum, offer) => sum + offer.price, 0),
+      found: found.length,
+      missing: offers.length - found.length,
+      complete: found.length === offers.length
+    };
+  });
+  const complete = totals.filter(total => total.complete).sort((a, b) => a.total - b.total);
   return {
     generatedAt: new Date().toISOString(),
-    config: APP_CONFIG,
-    stores: STORES.map(({ id, name, membership }) => ({ id, name, membership })),
+    stores: STORES,
     rows,
     totals,
-    cheapestTotalStore: cheapestTotal?.store || null
+    cheapestTotalStore: complete[0]?.store || null
   };
 }
 
@@ -411,63 +205,45 @@ async function readJsonBody(request) {
   return body ? JSON.parse(body) : {};
 }
 
-async function serveStatic(response, requestedPath) {
-  const safePath = requestedPath === "/" ? "/super-lista.html" : requestedPath;
-  const filePath = path.join(PUBLIC_DIR, safePath.replace(/^\/+/, ""));
-  const resolved = path.resolve(filePath);
-  if (!resolved.startsWith(path.resolve(PUBLIC_DIR))) {
+async function serveStatic(response, pathname) {
+  const relative = pathname === "/" ? "super-lista.html" : pathname.replace(/^\/+/, "");
+  const filePath = path.resolve(PUBLIC_DIR, relative);
+  if (!filePath.startsWith(path.resolve(PUBLIC_DIR))) {
     response.writeHead(403);
     response.end("Forbidden");
     return;
   }
-  const file = await fs.readFile(resolved);
+  const file = await fs.readFile(filePath);
   response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
   response.end(file);
 }
 
 async function router(request, response) {
   const url = new URL(request.url, `http://${request.headers.host}`);
-
   try {
-    if (request.method === "GET" && url.pathname === "/api/config") {
-      response.writeHead(200, DEFAULT_HEADERS);
-      response.end(JSON.stringify({ config: APP_CONFIG, stores: STORES.map(({ id, name, membership }) => ({ id, name, membership })) }));
-      return;
-    }
-
     if (request.method === "POST" && url.pathname === "/api/compare") {
       const body = await readJsonBody(request);
       const result = await compareProducts(Array.isArray(body.products) ? body.products : []);
-      response.writeHead(200, DEFAULT_HEADERS);
+      response.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
       response.end(JSON.stringify(result));
       return;
     }
-
     if (request.method === "GET") {
       await serveStatic(response, url.pathname);
       return;
     }
-
-    response.writeHead(405, DEFAULT_HEADERS);
-    response.end(JSON.stringify({ error: "Method not allowed" }));
+    response.writeHead(405);
+    response.end("Method not allowed");
   } catch (error) {
-    response.writeHead(500, DEFAULT_HEADERS);
+    response.writeHead(500, { "content-type": "application/json; charset=utf-8" });
     response.end(JSON.stringify({ error: "Error interno", detail: error.message }));
   }
 }
 
 if (require.main === module) {
   http.createServer(router).listen(PORT, "0.0.0.0", () => {
-    console.log(`Lista del Super escuchando en puerto ${PORT}`);
+    console.log(`Super lista escuchando en puerto ${PORT}`);
   });
 }
 
-module.exports = {
-  normalize,
-  parseArgentinePrice,
-  parseJsonLdOffers,
-  parseHtmlPriceHints,
-  parseVtexProducts,
-  chooseBestOffer,
-  compareProducts
-};
+module.exports = { compareProducts, scoreName, parseCotoProducts, parseCarrefourProducts };
