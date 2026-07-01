@@ -1,0 +1,660 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lista del Súper</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f4ef;
+      --paper: #fffdf8;
+      --ink: #1f2933;
+      --muted: #6b7280;
+      --line: #d8d2c3;
+      --accent: #b4232a;
+      --accent-2: #0f766e;
+      --soft: #e8f3f1;
+      --selected: #fff1f1;
+      --shadow: 0 10px 30px rgba(31, 41, 51, .08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: linear-gradient(180deg, #fbfaf6 0%, var(--bg) 100%);
+      color: var(--ink);
+    }
+
+    button, input, textarea { font: inherit; }
+
+    .app {
+      width: min(1180px, calc(100% - 24px));
+      margin: 0 auto;
+      padding: 18px 0 26px;
+    }
+
+    header {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 14px;
+      align-items: end;
+      padding: 10px 0 18px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.9rem, 4vw, 3rem);
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    .today {
+      color: var(--muted);
+      margin-top: 8px;
+      font-size: .98rem;
+    }
+
+    .top-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .btn {
+      border: 1px solid var(--line);
+      background: var(--paper);
+      color: var(--ink);
+      min-height: 42px;
+      border-radius: 8px;
+      padding: 0 13px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 1px 0 rgba(31, 41, 51, .04);
+      white-space: nowrap;
+    }
+
+    .btn:hover { border-color: #b6ad9a; }
+    .btn.primary {
+      background: var(--accent-2);
+      color: white;
+      border-color: var(--accent-2);
+    }
+    .btn.danger {
+      color: var(--accent);
+      border-color: #efcaca;
+      background: #fff8f8;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      margin: 18px 0;
+      align-items: center;
+    }
+
+    .search-wrap {
+      position: relative;
+    }
+
+    .search-wrap svg {
+      position: absolute;
+      left: 13px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted);
+      pointer-events: none;
+    }
+
+    #search {
+      width: 100%;
+      height: 48px;
+      border: 1px solid var(--line);
+      background: var(--paper);
+      border-radius: 8px;
+      padding: 0 14px 0 42px;
+      color: var(--ink);
+      outline: none;
+    }
+
+    #search:focus {
+      border-color: var(--accent-2);
+      box-shadow: 0 0 0 3px rgba(15, 118, 110, .14);
+    }
+
+    .counter {
+      height: 48px;
+      min-width: 130px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      background: var(--soft);
+      color: #115e59;
+      font-weight: 700;
+      border: 1px solid #b7dfd9;
+    }
+
+    main {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 340px;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .categories {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    section.category {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .category h2 {
+      margin: 0;
+      padding: 12px 14px;
+      color: var(--accent);
+      font-size: .95rem;
+      text-transform: uppercase;
+      letter-spacing: 0;
+      border-bottom: 1px solid var(--line);
+      background: #fff8f5;
+    }
+
+    .items {
+      display: grid;
+      gap: 2px;
+      padding: 8px;
+    }
+
+    .item {
+      min-height: 38px;
+      display: grid;
+      grid-template-columns: 24px 1fr;
+      gap: 8px;
+      align-items: center;
+      padding: 7px 8px;
+      border-radius: 7px;
+      cursor: pointer;
+      user-select: none;
+      border: 1px solid transparent;
+    }
+
+    .item:hover { background: #f7f4ec; }
+    .item.selected {
+      background: var(--selected);
+      border-color: #f0c6c6;
+    }
+
+    .box {
+      width: 20px;
+      height: 20px;
+      border: 2px solid #bd3d43;
+      border-radius: 4px;
+      display: grid;
+      place-items: center;
+      color: white;
+      background: white;
+      flex: 0 0 auto;
+    }
+
+    .item.selected .box {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .box svg { display: none; }
+    .item.selected .box svg { display: block; }
+
+    .side {
+      display: grid;
+      gap: 12px;
+      position: sticky;
+      top: 10px;
+    }
+
+    .panel {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 14px;
+    }
+
+    .panel h2 {
+      margin: 0 0 10px;
+      font-size: 1.05rem;
+      letter-spacing: 0;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 120px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      resize: vertical;
+      padding: 10px;
+      background: white;
+      color: var(--ink);
+      outline: none;
+    }
+
+    textarea:focus {
+      border-color: var(--accent-2);
+      box-shadow: 0 0 0 3px rgba(15, 118, 110, .14);
+    }
+
+    .selected-list {
+      display: grid;
+      gap: 6px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      max-height: 270px;
+      overflow: auto;
+    }
+
+    .selected-list li {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      border-bottom: 1px solid #eee8da;
+      padding: 7px 0;
+      font-size: .95rem;
+    }
+
+    .mini {
+      border: 0;
+      background: transparent;
+      color: var(--accent);
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 6px;
+      display: inline-grid;
+      place-items: center;
+    }
+
+    .mini:hover { background: #fff1f1; }
+
+    .empty {
+      color: var(--muted);
+      margin: 0;
+      font-size: .95rem;
+    }
+
+    .history {
+      display: grid;
+      gap: 8px;
+      max-height: 220px;
+      overflow: auto;
+    }
+
+    .history button {
+      text-align: left;
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 8px;
+      padding: 9px 10px;
+      cursor: pointer;
+      color: var(--ink);
+    }
+
+    .history button:hover { border-color: var(--accent-2); }
+
+    .toast {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      background: #13231f;
+      color: white;
+      padding: 11px 14px;
+      border-radius: 8px;
+      box-shadow: 0 12px 35px rgba(0, 0, 0, .22);
+      transform: translateY(18px);
+      opacity: 0;
+      pointer-events: none;
+      transition: .22s ease;
+      max-width: min(420px, calc(100% - 32px));
+    }
+
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    @media (max-width: 980px) {
+      main { grid-template-columns: 1fr; }
+      .side { position: static; }
+      .categories { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 650px) {
+      .app { width: min(100% - 18px, 1180px); padding-top: 10px; }
+      header, .toolbar { grid-template-columns: 1fr; }
+      .top-actions { justify-content: stretch; }
+      .top-actions .btn { flex: 1 1 150px; }
+      .categories { grid-template-columns: 1fr; }
+      .counter { justify-content: center; width: 100%; }
+      .btn { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div>
+        <h1>Lista del Súper</h1>
+        <div class="today" id="today"></div>
+      </div>
+      <div class="top-actions">
+        <button class="btn" id="saveBtn" type="button" title="Guardar lista" aria-label="Guardar lista">
+          <span>Guardar</span>
+        </button>
+        <button class="btn primary" id="whatsappBtn" type="button" title="Enviar por WhatsApp" aria-label="Enviar por WhatsApp">
+          <span>WhatsApp</span>
+        </button>
+        <button class="btn danger" id="clearBtn" type="button" title="Limpiar lista" aria-label="Limpiar lista">
+          <span>Limpiar</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="toolbar">
+      <div class="search-wrap">
+        <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+          <path fill="currentColor" d="M9.8 17.6a7.8 7.8 0 1 1 5.5-2.3l4.2 4.2-1.4 1.4-4.2-4.2a7.8 7.8 0 0 1-4.1 1Zm0-2a5.8 5.8 0 1 0 0-11.6 5.8 5.8 0 0 0 0 11.6Z"/>
+        </svg>
+        <input id="search" type="search" placeholder="Buscar producto..." autocomplete="off">
+      </div>
+      <div class="counter" id="counter">0 productos</div>
+    </div>
+
+    <main>
+      <div class="categories" id="categories"></div>
+
+      <aside class="side">
+        <div class="panel">
+          <h2>Notas</h2>
+          <textarea id="notes" placeholder="Agrega cantidades, marcas o productos que no figuren..."></textarea>
+        </div>
+
+        <div class="panel">
+          <h2>Seleccionados</h2>
+          <ul class="selected-list" id="selectedList"></ul>
+      <p class="empty" id="emptySelected">Todavía no seleccionaste productos.</p>
+        </div>
+
+        <div class="panel">
+          <h2>Listas guardadas</h2>
+          <div class="history" id="history"></div>
+          <p class="empty" id="emptyHistory">No hay listas guardadas todavía.</p>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    const products = {
+      "Verduras y frutas": ["Apio", "Batata", "Berenjena", "Brócoli", "Calabaza", "Cebolla", "Chaucha", "Coliflor", "Espinaca", "Lechuga", "Palta", "Papa", "Remolacha", "Repollo", "Tomate", "Zanahoria", "Zapallito", "Ananá", "Banana", "Frutilla", "Limón", "Mandarina", "Manzana", "Melón", "Naranja", "Pera", "Pomelo", "Sandía", "Uvas"],
+      "Fiambres & carnes": ["Jamón", "Salame", "Salchichas", "Cerdo", "Pescado", "Pollo", "Carne"],
+      "Lácteos": ["Leche", "Crema", "Manteca", "Postrecito", "Queso crema", "Queso para untar", "Queso en fetas", "Queso cremoso", "Queso en hebras", "Queso rallado", "Yogur"],
+      "Desayunos & meriendas": ["Azúcar", "Edulcorante", "Cacao", "Café", "Leche en polvo", "Mate cocido", "Té", "Yerba mate", "Dulce de leche", "Mermelada", "Miel", "Avena", "Cereales", "Galletitas de agua", "Galletitas dulces", "Mezcla para bizcochuelo"],
+      "Congelados": ["Arvejas", "Brócoli congelado", "Cebolla congelada", "Chaucha congelada", "Choclo congelado", "Espinaca congelada", "Hamburguesas", "Helado", "Milanesas de soja", "Papas fritas congeladas", "Patitas de pollo", "Pizza", "Jardinera"],
+      "Pastas & panes": ["Fideos soperos", "Pasta rellena", "Pasta seca corta", "Pasta seca larga", "Baguette", "Pan lactal", "Pan de pancho", "Pan de hamburguesa", "Pre-pizza", "Tapa de tarta", "Tapa de empanada"],
+      "Salsas & condimentos": ["Aceite de maíz", "Aceite de oliva", "Aceite balsámico", "Pimienta", "Sal", "Vinagre", "Ketchup", "Mayonesa", "Mostaza", "Salsa golf", "Salsa de soja", "Salsa de tomate"],
+      "Conservas": ["Arvejas en lata", "Atún", "Choclo en lata", "Duraznos", "Ensalada de frutas", "Garbanzos", "Lentejas", "Palmitos", "Sardinas"],
+      "Almacén (otros)": ["Aceitunas", "Arroz", "Harina", "Huevos", "Sopa"],
+      "Bebidas": ["Agua", "Agua saborizada", "Cerveza", "Gaseosa", "Jugo", "Soda", "Vino"],
+      "Snacks": ["Maní", "Nachos", "Palitos", "Papas fritas"],
+      "Limpieza": ["Bolsas de residuos", "Canasta p/ inodoro", "Desengrasante", "Desodorante de ambiente", "Detergente", "Esponja", "Jabón en polvo", "Lavandina", "Limpia inodoros", "Líquido p/piso", "Limpiador líquido", "Lustra muebles", "Rollo de cocina", "Servilletas", "Suavizante p/ropa", "Trapo"],
+      "Baño": ["Acondicionador", "Afeitadora desc.", "Algodón", "Cepillo de dientes", "Crema humectante", "Dentífrico", "Desodorante", "Hilo dental", "Jabón", "Papel higiénico", "Shampoo"]
+    };
+
+    const storageKey = "super-lista-activa";
+    const historyKey = "super-lista-historial";
+    const state = {
+      selected: new Set(),
+      notes: ""
+    };
+
+    const categoriesEl = document.querySelector("#categories");
+    const selectedListEl = document.querySelector("#selectedList");
+    const emptySelectedEl = document.querySelector("#emptySelected");
+    const emptyHistoryEl = document.querySelector("#emptyHistory");
+    const historyEl = document.querySelector("#history");
+    const notesEl = document.querySelector("#notes");
+    const searchEl = document.querySelector("#search");
+    const counterEl = document.querySelector("#counter");
+    const toastEl = document.querySelector("#toast");
+
+    const checkIcon = '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="m9 16.2-3.5-3.5L4.1 14.1 9 19 20.3 7.7l-1.4-1.4L9 16.2Z"/></svg>';
+    const removeIcon = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7.1 18.3 5.7 16.9l4.9-4.9-4.9-4.9 1.4-1.4 4.9 4.9 4.9-4.9 1.4 1.4-4.9 4.9 4.9 4.9-1.4 1.4-4.9-4.9-4.9 4.9Z"/></svg>';
+
+    function normalize(text) {
+      return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    }
+
+    function todayLabel() {
+      return new Intl.DateTimeFormat("es-AR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" }).format(new Date());
+    }
+
+    function compactDate() {
+      return new Intl.DateTimeFormat("es-AR", { dateStyle: "short", timeStyle: "short" }).format(new Date());
+    }
+
+    function showToast(message) {
+      toastEl.textContent = message;
+      toastEl.classList.add("show");
+      clearTimeout(showToast.timer);
+      showToast.timer = setTimeout(() => toastEl.classList.remove("show"), 2400);
+    }
+
+    function saveActive() {
+      localStorage.setItem(storageKey, JSON.stringify({
+        selected: Array.from(state.selected),
+        notes: state.notes
+      }));
+    }
+
+    function loadActive() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(storageKey) || "{}");
+        if (Array.isArray(saved.selected)) saved.selected.forEach(item => state.selected.add(item));
+        if (typeof saved.notes === "string") state.notes = saved.notes;
+      } catch (error) {
+        localStorage.removeItem(storageKey);
+      }
+    }
+
+    function getHistory() {
+      try {
+        return JSON.parse(localStorage.getItem(historyKey) || "[]");
+      } catch (error) {
+        return [];
+      }
+    }
+
+    function setHistory(items) {
+      localStorage.setItem(historyKey, JSON.stringify(items.slice(0, 12)));
+    }
+
+    function buildMessage() {
+      const selected = Array.from(state.selected);
+      const lines = [`Lista del súper - ${compactDate()}`, ""];
+      if (selected.length) {
+        lines.push("Productos:");
+        selected.forEach(item => lines.push(`- ${item}`));
+      }
+      if (state.notes.trim()) {
+        lines.push("", "Notas:", state.notes.trim());
+      }
+      if (!selected.length && !state.notes.trim()) {
+        lines.push("Sin productos seleccionados.");
+      }
+      return lines.join("\n");
+    }
+
+    function renderCategories() {
+      const query = normalize(searchEl.value.trim());
+      categoriesEl.innerHTML = "";
+
+      Object.entries(products).forEach(([category, items]) => {
+        const visibleItems = query ? items.filter(item => normalize(item).includes(query) || normalize(category).includes(query)) : items;
+        if (!visibleItems.length) return;
+
+        const section = document.createElement("section");
+        section.className = "category";
+        const title = document.createElement("h2");
+        title.textContent = category;
+        const list = document.createElement("div");
+        list.className = "items";
+
+        visibleItems.forEach(item => {
+          const row = document.createElement("div");
+          row.className = "item";
+          row.dataset.item = item;
+          row.setAttribute("role", "checkbox");
+          row.setAttribute("tabindex", "0");
+          row.setAttribute("aria-checked", state.selected.has(item) ? "true" : "false");
+          if (state.selected.has(item)) row.classList.add("selected");
+          row.innerHTML = `<span class="box">${checkIcon}</span><span>${item}</span>`;
+          row.addEventListener("click", () => toggleItem(item));
+          row.addEventListener("keydown", event => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              toggleItem(item);
+            }
+          });
+          list.appendChild(row);
+        });
+
+        section.append(title, list);
+        categoriesEl.appendChild(section);
+      });
+    }
+
+    function renderSelected() {
+      const selected = Array.from(state.selected);
+      selectedListEl.innerHTML = "";
+      emptySelectedEl.hidden = selected.length > 0;
+      counterEl.textContent = `${selected.length} ${selected.length === 1 ? "producto" : "productos"}`;
+
+      selected.forEach(item => {
+        const li = document.createElement("li");
+        li.innerHTML = `<span>${item}</span><button class="mini" type="button" title="Quitar ${item}" aria-label="Quitar ${item}">${removeIcon}</button>`;
+        li.querySelector("button").addEventListener("click", () => toggleItem(item));
+        selectedListEl.appendChild(li);
+      });
+    }
+
+    function renderHistory() {
+      const history = getHistory();
+      historyEl.innerHTML = "";
+      emptyHistoryEl.hidden = history.length > 0;
+      history.forEach(entry => {
+        const btn = document.createElement("button");
+        const amount = entry.selected.length;
+        btn.type = "button";
+        btn.innerHTML = `<strong>${entry.date}</strong><br><span>${amount} ${amount === 1 ? "producto" : "productos"}</span>`;
+        btn.addEventListener("click", () => {
+          state.selected = new Set(entry.selected);
+          state.notes = entry.notes || "";
+          notesEl.value = state.notes;
+          saveActive();
+          render();
+          showToast("Lista cargada.");
+        });
+        historyEl.appendChild(btn);
+      });
+    }
+
+    function render() {
+      renderCategories();
+      renderSelected();
+      renderHistory();
+    }
+
+    function toggleItem(item) {
+      if (state.selected.has(item)) {
+        state.selected.delete(item);
+      } else {
+        state.selected.add(item);
+      }
+      saveActive();
+      render();
+    }
+
+    function saveSnapshot() {
+      const selected = Array.from(state.selected);
+      if (!selected.length && !state.notes.trim()) {
+        showToast("Agrega productos o notas antes de guardar.");
+        return;
+      }
+      const history = getHistory();
+      history.unshift({
+        id: Date.now(),
+        date: compactDate(),
+        selected,
+        notes: state.notes
+      });
+      setHistory(history);
+      renderHistory();
+      showToast("Lista guardada con fecha.");
+    }
+
+    function sendWhatsapp() {
+      if (!state.selected.size && !state.notes.trim()) {
+        showToast("La lista esta vacia.");
+        return;
+      }
+      saveSnapshot();
+      const url = `https://wa.me/?text=${encodeURIComponent(buildMessage())}`;
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+
+    function clearList() {
+      if (!state.selected.size && !state.notes.trim()) return;
+      const ok = window.confirm("¿Limpiar la lista actual?");
+      if (!ok) return;
+      state.selected.clear();
+      state.notes = "";
+      notesEl.value = "";
+      saveActive();
+      render();
+      showToast("Lista limpia.");
+    }
+
+    document.querySelector("#today").textContent = todayLabel();
+    document.querySelector("#saveBtn").addEventListener("click", saveSnapshot);
+    document.querySelector("#whatsappBtn").addEventListener("click", sendWhatsapp);
+    document.querySelector("#clearBtn").addEventListener("click", clearList);
+    searchEl.addEventListener("input", renderCategories);
+    notesEl.addEventListener("input", () => {
+      state.notes = notesEl.value;
+      saveActive();
+    });
+
+    loadActive();
+    notesEl.value = state.notes;
+    render();
+  </script>
+</body>
+</html>

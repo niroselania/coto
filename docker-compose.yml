@@ -1,0 +1,8 @@
+services:
+  super-lista:
+    build: .
+    image: super-lista:latest
+    container_name: super-lista
+    restart: unless-stopped
+    ports:
+      - "8088:80"
