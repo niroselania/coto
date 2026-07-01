@@ -11,7 +11,7 @@ docker compose up -d --build
 La app queda disponible en:
 
 ```text
-http://localhost:8088
+http://localhost:6066
 ```
 
 ## Deploy en Portainer
